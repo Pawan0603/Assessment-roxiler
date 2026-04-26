@@ -30,8 +30,11 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string | null>>({});
 
+  const [isSubmiting, setIsSubmiting] = useState<boolean>(false);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmiting(true);
 
     const errs = {
       name: validateName(name),
@@ -55,6 +58,8 @@ export default function SignupPage() {
       router.push("/stores");
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      setIsSubmiting(false);
     }
   };
 
@@ -141,8 +146,8 @@ export default function SignupPage() {
               )}
             </div>
 
-            <Button type="submit" className="w-full">
-              Create account
+            <Button type="submit" className="w-full" disabled={isSubmiting}>
+              {isSubmiting ? "Creating account..." : "Create account"}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">

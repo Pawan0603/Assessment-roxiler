@@ -14,16 +14,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { toast } from "sonner";
 import axios from "axios";
+import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refresh } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [isSubmiting, setIsSubmiting] = useState<boolean>(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmiting(true);
 
     const ee = validateEmail(email);
     if (ee) return setErr(ee);
@@ -35,12 +39,14 @@ export default function LoginPage() {
       const u = res.data.user;
       localStorage.setItem("user", JSON.stringify(u));
       toast.success(`Welcome back, ${u.name.split(" ")[0]}`);
-      console.log(u);
+      refresh();
       if (u.role === "admin") router.push("/admin");
       else if (u.role === "owner") router.push("/owner");
       else router.push("/stores");
     } catch (error) {
       toast.error("Invalid email or password");
+    } finally {
+      setIsSubmiting(false);
     }
 
 
@@ -78,8 +84,8 @@ export default function LoginPage() {
 
             {err && <p className="text-sm text-destructive">{err}</p>}
 
-            <Button type="submit" className="w-full hover:cursor-pointer">
-              Sign in
+            <Button type="submit" className="w-full hover:cursor-pointer" disabled={isSubmiting}>
+              {isSubmiting ? "Signing in..." : "Sign in"}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">

@@ -220,12 +220,14 @@ function AddStoreDialog({ open, setOpen, db, refresh }: any) {
   const [ownerId, setOwnerId] = useState("none");
 
   const [errors, setErrors] = useState<Record<string, string | null>>({});
+  const [isSubmiting, setIsSubmiting] = useState<boolean>(false);
 
   const owners = db.users.filter((u: any) => u.role === "owner");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    setIsSubmiting(true);
     const errs = {
       name: validateName(name),
       email: validateEmail(email),
@@ -256,6 +258,8 @@ function AddStoreDialog({ open, setOpen, db, refresh }: any) {
       setOpen(false);
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setIsSubmiting(false);  
     }
   };
 
@@ -308,8 +312,8 @@ function AddStoreDialog({ open, setOpen, db, refresh }: any) {
             </Select>
           </div>
 
-          <Button type="submit" className="w-full">
-            Create Store
+          <Button type="submit" className="w-full" disabled={isSubmiting}>
+            {isSubmiting ? "Creating Store..." : "Create Store"}
           </Button>
         </form>
       </DialogContent>

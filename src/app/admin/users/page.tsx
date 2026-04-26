@@ -267,9 +267,12 @@ function AddUserDialog({ open, setOpen, refresh }: any) {
 
   const [errors, setErrors] = useState<Record<string, string | null>>({});
 
+  const [isSubmiting, setIsSubmiting] = useState<boolean>(false);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    setIsSubmiting(true);
     const errs = {
       name: validateName(name),
       email: validateEmail(email),
@@ -296,6 +299,8 @@ function AddUserDialog({ open, setOpen, refresh }: any) {
       setOpen(false);
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      setIsSubmiting(false);
     }
   };
 
@@ -352,8 +357,8 @@ function AddUserDialog({ open, setOpen, refresh }: any) {
             </Select>
           </div>
 
-          <Button type="submit" className="w-full">
-            Create User
+          <Button type="submit" className="w-full" disabled={isSubmiting}>
+            {isSubmiting ? "Creating User..." : "Create User"}
           </Button>
         </form>
       </DialogContent>
