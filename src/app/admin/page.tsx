@@ -1,49 +1,98 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/lib/auth";
-import { useDB } from "@/lib/store";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 
 import { Users, Store, Star } from "lucide-react";
+import { toast } from "sonner";
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const db = useDB();
   const router = useRouter();
 
-  // 🔥 Auth + Role protection
-  // useEffect(() => {
-  //   if (!user) router.push("/login");
-  //   else if (user.role !== "admin") router.push("/");
-  // }, [user, router]);
+  // 🔥 NEW STATE (same structure as db)
+  const [db, setDb] = useState({
+    users: [] as any[],
+    stores: [] as any[],
+    ratings: [] as any[],
+  });
+
+  // 🔐 Auth protection
+  useEffect(() => {
+    if (!user) router.push("/login");
+    else if (user.role !== "admin") router.push("/");
+  }, [user, router]);
+
+  // 🔥 FETCH DASHBOARD DATA
+  const fetchDashboard = async () => {
+    try {
+      const res = await fetch("/api/admin/dashboard", {
+        credentials: "include",
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // 🔥 map API → old db structure
+      setDb({
+        users: data.recentUsers.map((u: any, i: number) => ({
+          id: i,
+          name: u.name,
+          role: u.role,
+        })),
+        stores: data.recentStores.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          avg: s.avgRating,
+        })),
+        ratings: Array(data.stats.totalRatings).fill({}), // just for count
+      });
+
+      // also override counts
+      setStats({
+        totalUsers: data.stats.totalUsers,
+        totalStores: data.stats.totalStores,
+        totalRatings: data.stats.totalRatings,
+      });
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  // 🔥 stats state (same UI)
+  const [statsState, setStats] = useState({
+    totalUsers: 0,
+    totalStores: 0,
+    totalRatings: 0,
+  });
+
+  useEffect(() => {
+    fetchDashboard();
+  }, []);
 
   if (!user || user.role !== "admin") return null;
-
-  const totalUsers = db.users.length;
-  const totalStores = db.stores.length;
-  const totalRatings = db.ratings.length;
 
   const stats = [
     {
       label: "Total Users",
-      value: totalUsers,
+      value: statsState.totalUsers,
       icon: Users,
       color: "from-blue-500 to-blue-600",
     },
     {
       label: "Total Stores",
-      value: totalStores,
+      value: statsState.totalStores,
       icon: Store,
       color: "from-emerald-500 to-emerald-600",
     },
     {
       label: "Total Ratings",
-      value: totalRatings,
+      value: statsState.totalRatings,
       icon: Star,
       color: "from-amber-500 to-amber-600",
     },
@@ -88,22 +137,19 @@ export default function AdminDashboard() {
             <h3 className="font-semibold">Recent Stores</h3>
 
             <ul className="mt-3 space-y-2">
-              {db.stores
-                .slice(-5)
-                .reverse()
-                .map((s) => (
-                  <li
-                    key={s.id}
-                    className="flex items-center justify-between rounded-md border p-2 text-sm"
-                  >
-                    <span className="truncate">{s.name}</span>
+              {db.stores.slice(0, 5).map((s) => (
+                <li
+                  key={s.id}
+                  className="flex items-center justify-between rounded-md border p-2 text-sm"
+                >
+                  <span className="truncate">{s.name}</span>
 
-                    <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                      {/* {api.storeAverage(s.id).toFixed(1)} */} tepx placeholder
-                    </span>
-                  </li>
-                ))}
+                  <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                    {s.avg?.toFixed(1)}
+                  </span>
+                </li>
+              ))}
             </ul>
           </CardContent>
         </Card>
@@ -114,21 +160,18 @@ export default function AdminDashboard() {
             <h3 className="font-semibold">Recent Users</h3>
 
             <ul className="mt-3 space-y-2">
-              {db.users
-                .slice(-5)
-                .reverse()
-                .map((u) => (
-                  <li
-                    key={u.id}
-                    className="flex items-center justify-between rounded-md border p-2 text-sm"
-                  >
-                    <span className="truncate">{u.name}</span>
+              {db.users.slice(0, 5).map((u) => (
+                <li
+                  key={u.id}
+                  className="flex items-center justify-between rounded-md border p-2 text-sm"
+                >
+                  <span className="truncate">{u.name}</span>
 
-                    <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-xs">
-                      {u.role}
-                    </span>
-                  </li>
-                ))}
+                  <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-xs">
+                    {u.role}
+                  </span>
+                </li>
+              ))}
             </ul>
           </CardContent>
         </Card>

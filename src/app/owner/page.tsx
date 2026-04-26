@@ -1,37 +1,86 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/lib/auth";
-import { useDB, api } from "@/lib/store";
+// ❌ remove
+// import { useDB, api } from "@/lib/store";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { StarRating } from "@/components/StarRating";
 
 import { Star, Users } from "lucide-react";
+import { toast } from "sonner";
 
 export default function OwnerDashboard() {
   const { user } = useAuth();
-  const db = useDB();
   const router = useRouter();
 
-  // 🔥 Auth + role protection
-  // useEffect(() => {
-  //   if (!user) router.push("/login");
-  //   else if (user.role !== "owner") router.push("/");
-  // }, [user, router]);
+  // 🔥 FAKE DB STRUCTURE (same shape)
+  const [db, setDb] = useState({
+    stores: [] as any[],
+    ratings: [] as any[],
+  });
+
+  const [raters, setRaters] = useState<any[]>([]);
+  const [overallAvg, setOverallAvg] = useState(0);
+
+  // 🔐 Auth
+  useEffect(() => {
+    if (!user) router.push("/login");
+    else if (user.role !== "owner") router.push("/");
+  }, [user, router]);
+
+  // 🔥 FETCH API
+  const fetchDashboard = async () => {
+    try {
+      const res = await fetch("/api/owner/dashboard", {
+        credentials: "include",
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // 🔥 map stores → same UI shape
+      const stores = data.stores.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        address: s.address,
+        avg: s.avgRating,
+        totalRatings: s.totalRatings,
+      }));
+
+      // 🔥 map ratings → same raters structure
+      const mappedRaters = data.ratings.map((r: any) => ({
+        rating: {
+          id: r.id,
+          value: r.value,
+        },
+        user: r.user,
+        store: r.store,
+      }));
+
+      setDb({
+        stores,
+        ratings: data.ratings,
+      });
+
+      setRaters(mappedRaters);
+      setOverallAvg(data.stats.averageRating);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboard();
+  }, []);
 
   if (!user || user.role !== "owner") return null;
 
-  const stores = db.stores.filter((s) => s.ownerId === user.id);
-  const raters = api.ratersForOwner(user.id);
-
-  const overallAvg = stores.length
-    ? stores.reduce((acc, s) => acc + api.storeAverage(s.id), 0) /
-      stores.length
-    : 0;
+  const stores = db.stores;
 
   return (
     <AppLayout>
@@ -102,17 +151,11 @@ export default function OwnerDashboard() {
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
 
                 <span className="font-medium">
-                  {api.storeAverage(s.id).toFixed(2)}
+                  {s.avg.toFixed(2)}
                 </span>
 
                 <span className="text-sm text-muted-foreground">
-                  (
-                  {
-                    db.ratings.filter(
-                      (r) => r.storeId === s.id
-                    ).length
-                  }{" "}
-                  ratings)
+                  ({s.totalRatings} ratings)
                 </span>
               </div>
             </CardContent>
