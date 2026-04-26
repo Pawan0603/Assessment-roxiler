@@ -1,65 +1,103 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+import { useAuth } from "@/lib/auth";
+import { AppLayout } from "@/components/AppLayout";
+
+import { Card, CardContent } from "@/components/ui/card";
+import { Store, Users, Star, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+export default function HomePage() {
+  const { user } = useAuth();
+  const router = useRouter();
+
+  // 🔥 Role-based redirect (replace Navigate)
+  useEffect(() => {
+    if (user?.role === "admin") router.push("/admin");
+    else if (user?.role === "user") router.push("/stores");
+    else if (user?.role === "owner") router.push("/owner");
+  }, [user, router]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <AppLayout>
+      <section className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-primary/10 via-background to-accent p-8 sm:p-12 md:p-16">
+        <div className="max-w-2xl">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+            Trusted ratings, real stores
+          </div>
+
+          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl">
+            Rate the stores you love.
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+
+          <p className="mt-4 text-base text-muted-foreground sm:text-lg">
+            A unified platform where customers, store owners, and administrators come together to
+            build a transparent rating community.
           </p>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Button size="lg" onClick={() => router.push("/signup")}>
+              Get started
+            </Button>
+
+            <Button size="lg" variant="outline" onClick={() => router.push("/login")}>
+              Login
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </section>
+
+      <section className="mt-10 grid gap-4 sm:grid-cols-3">
+        {[
+          { icon: Users, title: "For Customers", text: "Discover and rate stores in your area." },
+          { icon: Store, title: "For Store Owners", text: "Track ratings and customer feedback." },
+          { icon: ShieldCheck, title: "For Admins", text: "Manage users and stores at scale." },
+        ].map((f) => (
+          <Card key={f.title}>
+            <CardContent className="p-6">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <f.icon className="h-5 w-5" />
+              </div>
+              <h3 className="font-semibold">{f.title}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{f.text}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+
+      <Card className="mt-8">
+        <CardContent className="p-6">
+          <h3 className="font-semibold">Try the demo</h3>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Use one of these accounts to explore each role:
+          </p>
+
+          <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+            <div className="rounded-md border bg-muted/50 p-3">
+              <div className="font-medium">Admin</div>
+              <div className="text-muted-foreground">admin@example.com</div>
+              <div className="text-muted-foreground">Admin@123</div>
+            </div>
+
+            <div className="rounded-md border bg-muted/50 p-3">
+              <div className="font-medium">Normal User</div>
+              <div className="text-muted-foreground">user@example.com</div>
+              <div className="text-muted-foreground">User@1234</div>
+            </div>
+
+            <div className="rounded-md border bg-muted/50 p-3">
+              <div className="font-medium">Store Owner</div>
+              <div className="text-muted-foreground">owner@example.com</div>
+              <div className="text-muted-foreground">Owner@123</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </AppLayout>
   );
 }
