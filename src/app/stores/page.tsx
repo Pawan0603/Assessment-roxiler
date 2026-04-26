@@ -4,7 +4,6 @@ import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/lib/auth";
-import { useDB, api } from "@/lib/store";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,29 +15,75 @@ import { toast } from "sonner";
 
 export default function StoresPage() {
   const { user } = useAuth();
-  const db = useDB();
   const router = useRouter();
 
+  // 🔥 mimic db.stores
+  const [dbStores, setDbStores] = useState<any[]>([]);
   const [q, setQ] = useState("");
 
-  // 🔥 Redirect if not logged in
+  // 🔐 redirect
   useEffect(() => {
     if (!user) router.push("/login");
   }, [user, router]);
 
+  // 🔥 FETCH STORES
+  const fetchStores = async () => {
+    try {
+      const res = await fetch("/api/stores", {
+        credentials: "include",
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // 🔥 map → same UI structure
+      const mapped = data.stores.map((s: any) => ({
+        id: s._id,
+        name: s.name,
+        address: s.address,
+        avg: s.avgRating,
+        mine: s.myRating || 0, // 🔥 backend should send this
+      }));
+
+      setDbStores(mapped);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchStores();
+  }, []);
+
+  // 🔥 SAME FILTER LOGIC
   const stores = useMemo(() => {
-    return db.stores.filter(
+    return dbStores.filter(
       (s) =>
         s.name.toLowerCase().includes(q.toLowerCase()) ||
         s.address.toLowerCase().includes(q.toLowerCase())
     );
-  }, [db.stores, q]);
+  }, [dbStores, q]);
 
-  if (!user) return null; // avoid render flicker
+  if (!user) return null;
 
-  const handleRate = (storeId: string, value: number) => {
-    api.rateStore(storeId, user.id, value);
-    toast.success(`Rated ${value} star${value > 1 ? "s" : ""}`);
+  // 🔥 RATE STORE
+  const handleRate = async (storeId: string, value: number) => {
+    try {
+      const res = await fetch("/api/ratings", {
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ storeId, value }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      toast.success(`Rated ${value} star${value > 1 ? "s" : ""}`);
+
+      fetchStores(); // 🔥 refresh
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   return (
@@ -62,8 +107,8 @@ export default function StoresPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stores.map((s) => {
-          const avg = api.storeAverage(s.id);
-          const mine = api.storeRatingByUser(s.id, user.id);
+          const avg = s.avg;
+          const mine = s.mine;
 
           return (
             <Card key={s.id} className="transition-shadow hover:shadow-lg">

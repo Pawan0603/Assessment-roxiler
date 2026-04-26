@@ -69,7 +69,7 @@ export default function AdminStoresPage() {
   const fetchData = async () => {
     try {
       const [storesRes, usersRes] = await Promise.all([
-        fetch("/api/stores", { credentials: "include" }),
+        fetch("/api/admin/stores", { credentials: "include" }),
         fetch("/api/users", { credentials: "include" }),
       ]);
 
@@ -236,7 +236,7 @@ function AddStoreDialog({ open, setOpen, db, refresh }: any) {
     if (Object.values(errs).some(Boolean)) return;
 
     try {
-      const res = await fetch("/api/stores", {
+      const res = await fetch("/api/admin/stores", {
         method: "POST",
         credentials: "include",
         body: JSON.stringify({
