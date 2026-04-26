@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/lib/auth";
-import { useDB, api } from "@/lib/store";
 
 import { validateAddress, validateEmail, validateName } from "@/lib/validations";
 
@@ -14,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
 import {
   Select,
   SelectContent,
@@ -38,8 +39,14 @@ type SortField = "name" | "email" | "address" | "rating";
 
 export default function AdminStoresPage() {
   const { user } = useAuth();
-  const db = useDB();
   const router = useRouter();
+
+  // 🔥 mimic same db structure
+  const [db, setDb] = useState({
+    stores: [] as any[],
+    ratings: [] as any[],
+    users: [] as any[],
+  });
 
   const [fName, setFName] = useState("");
   const [fEmail, setFEmail] = useState("");
@@ -52,12 +59,49 @@ export default function AdminStoresPage() {
 
   const [open, setOpen] = useState(false);
 
-  // 🔥 Auth protection
+  // 🔐 Auth protection
   useEffect(() => {
     if (!user) router.push("/login");
     else if (user.role !== "admin") router.push("/");
   }, [user, router]);
 
+  // 🔥 FETCH DATA
+  const fetchData = async () => {
+    try {
+      const [storesRes, usersRes] = await Promise.all([
+        fetch("/api/stores", { credentials: "include" }),
+        fetch("/api/users", { credentials: "include" }),
+      ]);
+
+      const storesData = await storesRes.json();
+      const usersData = await usersRes.json();
+
+      if (!storesRes.ok) throw new Error(storesData.error);
+
+      // 🔥 mapping → same structure
+      const mappedStores = storesData.stores.map((s: any) => ({
+        id: s._id,
+        name: s.name,
+        email: s.email,
+        address: s.address,
+        avg: s.avgRating || 0,
+      }));
+
+      setDb({
+        stores: mappedStores,
+        ratings: [], // not needed now
+        users: usersData.users || [],
+      });
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // 🔥 SAME LOGIC (unchanged)
   const rows = useMemo(() => {
     let list = db.stores
       .filter(
@@ -66,7 +110,7 @@ export default function AdminStoresPage() {
           s.email.toLowerCase().includes(fEmail.toLowerCase()) &&
           s.address.toLowerCase().includes(fAddress.toLowerCase())
       )
-      .map((s) => ({ ...s, avg: api.storeAverage(s.id) }));
+      .map((s) => ({ ...s }));
 
     list = [...list].sort((a, b) => {
       if (sort.field === "rating") {
@@ -80,7 +124,7 @@ export default function AdminStoresPage() {
     });
 
     return list;
-  }, [db.stores, db.ratings, fName, fEmail, fAddress, sort]);
+  }, [db.stores, fName, fEmail, fAddress, sort]);
 
   if (!user || user.role !== "admin") return null;
 
@@ -100,7 +144,7 @@ export default function AdminStoresPage() {
           </p>
         </div>
 
-        <AddStoreDialog open={open} setOpen={setOpen} />
+        <AddStoreDialog open={open} setOpen={setOpen} db={db} refresh={fetchData} />
       </div>
 
       {/* Filters */}
@@ -159,14 +203,6 @@ export default function AdminStoresPage() {
                   </td>
                 </tr>
               ))}
-
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
-                    No stores found
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -175,27 +211,19 @@ export default function AdminStoresPage() {
   );
 }
 
-/* ---------------- Dialog ---------------- */
+/* ---------------- Dialog (UI SAME) ---------------- */
 
-function AddStoreDialog({
-  open,
-  setOpen,
-}: {
-  open: boolean;
-  setOpen: (v: boolean) => void;
-}) {
-  const db = useDB();
-
+function AddStoreDialog({ open, setOpen, db, refresh }: any) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
-  const [ownerId, setOwnerId] = useState<string>("none");
+  const [ownerId, setOwnerId] = useState("none");
 
   const [errors, setErrors] = useState<Record<string, string | null>>({});
 
-  const owners = db.users.filter((u) => u.role === "owner");
+  const owners = db.users.filter((u: any) => u.role === "owner");
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const errs = {
@@ -205,23 +233,30 @@ function AddStoreDialog({
     };
 
     setErrors(errs);
-
     if (Object.values(errs).some(Boolean)) return;
 
-    api.addStore({
-      name,
-      email,
-      address,
-      ownerId: ownerId === "none" ? undefined : ownerId,
-    });
+    try {
+      const res = await fetch("/api/stores", {
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          name,
+          email,
+          address,
+          ownerId: ownerId === "none" ? undefined : ownerId,
+        }),
+      });
 
-    toast.success("Store created");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
 
-    setOpen(false);
-    setName("");
-    setEmail("");
-    setAddress("");
-    setOwnerId("none");
+      toast.success("Store created");
+
+      refresh();
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   return (
@@ -238,25 +273,25 @@ function AddStoreDialog({
         </DialogHeader>
 
         <form onSubmit={submit} className="space-y-3">
-          <div>
+          <div className="flex flex-col gap-2 my-2">
             <Label>Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
             {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
           </div>
 
-          <div>
+          <div className="flex flex-col gap-2 my-2">
             <Label>Email</Label>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
           </div>
 
-          <div>
+          <div className="flex flex-col gap-2 my-2" >
             <Label>Address</Label>
             <Textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} />
             {errors.address && <p className="text-sm text-destructive">{errors.address}</p>}
           </div>
 
-          <div>
+          <div className="flex flex-col gap-2 my-2">
             <Label>Owner (optional)</Label>
             <Select value={ownerId} onValueChange={setOwnerId}>
               <SelectTrigger>
@@ -264,8 +299,8 @@ function AddStoreDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No owner</SelectItem>
-                {owners.map((o) => (
-                  <SelectItem key={o.id} value={o.id}>
+                {owners.map((o: any) => (
+                  <SelectItem key={o._id} value={o._id}>
                     {o.name}
                   </SelectItem>
                 ))}
