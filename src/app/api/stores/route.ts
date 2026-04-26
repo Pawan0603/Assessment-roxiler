@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { Store } from "@/models/Store";
-import { Rating } from "@/models/Rating";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import connectDB from "@/lib/connectDB";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
-// 🔒 get token
+// 🔒 get token from cookie
 function getToken(req: Request) {
   const cookie = req.headers.get("cookie") || "";
   return cookie
@@ -20,14 +20,9 @@ export async function GET(req: Request) {
     await connectDB();
 
     const { searchParams } = new URL(req.url);
-
     const search = searchParams.get("search") || "";
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
 
-    const skip = (page - 1) * limit;
-
-    // 🔐 optional auth (for owner filtering)
+    // 🔐 user decode (optional)
     let user: any = null;
     const token = getToken(req);
 
@@ -37,65 +32,103 @@ export async function GET(req: Request) {
       } catch {}
     }
 
+    // 🔥 IMPORTANT: convert to string for safe compare
+    const userIdStr = user?.userId ? String(user.userId) : null;
+
     // 🔍 filter
-    const filter: any = {};
+    const match: any = {};
 
     if (search) {
-      filter.$or = [
+      match.$or = [
         { name: { $regex: search, $options: "i" } },
         { address: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
       ];
     }
 
-    // 👤 owner → only their stores
+    // 👤 owner filter
     if (user?.role === "owner") {
-      filter.ownerId = user.userId;
+      match.ownerId = new mongoose.Types.ObjectId(user.userId);
     }
 
-    // 📊 get stores
-    const [stores, total] = await Promise.all([
-      Store.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
+    // 🔥 AGGREGATION PIPELINE
+    const stores = await Store.aggregate([
+      { $match: match },
 
-      Store.countDocuments(filter),
+      // 🔗 join ratings
+      {
+        $lookup: {
+          from: "ratings",
+          localField: "_id",
+          foreignField: "storeId",
+          as: "ratings",
+        },
+      },
+
+      // ⭐ average rating
+      {
+        $addFields: {
+          avgRating: {
+            $cond: [
+              { $gt: [{ $size: "$ratings" }, 0] },
+              { $avg: "$ratings.value" },
+              0,
+            ],
+          },
+        },
+      },
+
+      // 👤 user's rating (FIXED 🔥)
+      {
+        $addFields: {
+          myRating: userIdStr
+            ? {
+                $let: {
+                  vars: {
+                    my: {
+                      $filter: {
+                        input: "$ratings",
+                        as: "r",
+                        cond: {
+                          $eq: [
+                            { $toString: "$$r.userId" },
+                            userIdStr,
+                          ],
+                        },
+                      },
+                    },
+                  },
+                  in: {
+                    $cond: [
+                      { $gt: [{ $size: "$$my" }, 0] },
+                      { $arrayElemAt: ["$$my.value", 0] },
+                      null,
+                    ],
+                  },
+                },
+              }
+            : null,
+        },
+      },
+
+      // 🎯 clean response
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          address: 1,
+          ownerId: 1,
+          avgRating: { $round: ["$avgRating", 2] },
+          myRating: 1,
+        },
+      },
+
+      { $sort: { createdAt: -1 } },
     ]);
 
-    // 🔥 attach avg rating
-    const storesWithAvg = await Promise.all(
-      stores.map(async (store) => {
-        const ratings = await Rating.find({ storeId: store._id });
-
-        const avg =
-          ratings.length > 0
-            ? ratings.reduce((acc, r) => acc + r.value, 0) /
-              ratings.length
-            : 0;
-
-        return {
-          _id: store._id,
-          name: store.name,
-          email: store.email,
-          address: store.address,
-          ownerId: store.ownerId,
-          avgRating: Number(avg.toFixed(2)),
-        };
-      })
-    );
-
-    return NextResponse.json({
-      stores: storesWithAvg,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    });
+    return NextResponse.json({ stores });
   } catch (error) {
-    console.error("Get Stores Error:", error);
+    console.error("Stores API Error:", error);
 
     return NextResponse.json(
       { error: "Something went wrong" },
